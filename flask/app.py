@@ -1460,42 +1460,6 @@ class Flask(_PackageBoundObject):
         # otherwise dispatch to the handler for that endpoint
         return self.view_functions[rule.endpoint](**req.view_args)
 
-    def full_dispatch_request(self):
-        """Dispatches the request and on top of that performs request
-        pre and postprocessing as well as HTTP exception catching and
-        error handling.
-
-        .. versionadded:: 0.7
-        """
-        self.try_trigger_before_first_request_functions()
-        try:
-            request_started.send(self)
-            rv = self.preprocess_request()
-            if rv is None:
-                rv = self.dispatch_request()
-        except Exception as e:
-            rv = self.handle_user_exception(e)
-        response = self.make_response(rv)
-        response = self.process_response(response)
-        request_finished.send(self, response=response)
-        return response
-
-    def try_trigger_before_first_request_functions(self):
-        """Called before each request and will ensure that it triggers
-        the :attr:`before_first_request_funcs` and only exactly once per
-        application instance (which means process usually).
-
-        :internal:
-        """
-        if self._got_first_request:
-            return
-        with self._before_request_lock:
-            if self._got_first_request:
-                return
-            self._got_first_request = True
-            for func in self.before_first_request_funcs:
-                func()
-
     def make_default_options_response(self):
         """This method is called to create the default `OPTIONS` response.
         This can be changed through subclassing to change the default
@@ -1641,58 +1605,6 @@ class Flask(_PackageBoundObject):
             reraise(exc_type, exc_value, tb)
         raise error
 
-    def preprocess_request(self):
-        """Called before the actual request dispatching and will
-        call every as :meth:`before_request` decorated function.
-        If any of these function returns a value it's handled as
-        if it was the return value from the view and further
-        request handling is stopped.
-
-        This also triggers the :meth:`url_value_processor` functions before
-        the actual :meth:`before_request` functions are called.
-        """
-        bp = _request_ctx_stack.top.request.blueprint
-
-        funcs = self.url_value_preprocessors.get(None, ())
-        if bp is not None and bp in self.url_value_preprocessors:
-            funcs = chain(funcs, self.url_value_preprocessors[bp])
-        for func in funcs:
-            func(request.endpoint, request.view_args)
-
-        funcs = self.before_request_funcs.get(None, ())
-        if bp is not None and bp in self.before_request_funcs:
-            funcs = chain(funcs, self.before_request_funcs[bp])
-        for func in funcs:
-            rv = func()
-            if rv is not None:
-                return rv
-
-    def process_response(self, response):
-        """Can be overridden in order to modify the response object
-        before it's sent to the WSGI server.  By default this will
-        call all the :meth:`after_request` decorated functions.
-
-        .. versionchanged:: 0.5
-           As of Flask 0.5 the functions registered for after request
-           execution are called in reverse order of registration.
-
-        :param response: a :attr:`response_class` object.
-        :return: a new response object or the same, has to be an
-                 instance of :attr:`response_class`.
-        """
-        ctx = _request_ctx_stack.top
-        bp = ctx.request.blueprint
-        funcs = ctx._after_request_functions
-        if bp is not None and bp in self.after_request_funcs:
-            funcs = chain(funcs, reversed(self.after_request_funcs[bp]))
-        if None in self.after_request_funcs:
-            funcs = chain(funcs, reversed(self.after_request_funcs[None]))
-        for handler in funcs:
-            response = handler(response)
-        if not self.session_interface.is_null_session(ctx.session):
-            self.save_session(ctx.session, response)
-        return response
-
     def do_teardown_request(self, exc=None):
         """Called after the actual request dispatching and will
         call every as :meth:`teardown_request` decorated function.  This is
@@ -1728,48 +1640,9 @@ class Flask(_PackageBoundObject):
         appcontext_tearing_down.send(self, exc=exc)
 
     def app_context(self):
-        """Binds the application only.  For as long as the application is bound
-        to the current context the :data:`flask.current_app` points to that
-        application.  An application context is automatically created when a
-        request context is pushed if necessary.
-
-        Example usage::
-
-            with app.app_context():
-                ...
-
-        .. versionadded:: 0.9
-        """
         return AppContext(self)
 
     def request_context(self, environ):
-        """Creates a :class:`~flask.ctx.RequestContext` from the given
-        environment and binds it to the current context.  This must be used in
-        combination with the `with` statement because the request is only bound
-        to the current context for the duration of the `with` block.
-
-        Example usage::
-
-            with app.request_context(environ):
-                do_something_with(request)
-
-        The object returned can also be used without the `with` statement
-        which is useful for working in the shell.  The example above is
-        doing exactly the same as this code::
-
-            ctx = app.request_context(environ)
-            ctx.push()
-            try:
-                do_something_with(request)
-            finally:
-                ctx.pop()
-
-        .. versionchanged:: 0.3
-           Added support for non-with statement usage and `with` statement
-           is now passed the ctx object.
-
-        :param environ: a WSGI environment
-        """
         return RequestContext(self, environ)
 
     def test_request_context(self, *args, **kwargs):
@@ -1797,17 +1670,6 @@ class Flask(_PackageBoundObject):
 
         Then you still have the original application object around and
         can continue to call methods on it.
-
-        .. versionchanged:: 0.7
-           The behavior of the before and after request callbacks was changed
-           under error conditions and a new callback was added that will
-           always execute at the end of the request, independent on if an
-           error occurred or not.  See :ref:`callbacks-and-errors`.
-
-        :param environ: a WSGI environment
-        :param start_response: a callable accepting a status code,
-                               a list of headers and an optional
-                               exception context to start the response
         """
         ctx = self.request_context(environ)
         ctx.push()
@@ -1823,20 +1685,3 @@ class Flask(_PackageBoundObject):
             if self.should_ignore_error(error):
                 error = None
             ctx.auto_pop(error)
-
-    @property
-    def modules(self):
-        from warnings import warn
-        warn(DeprecationWarning('Flask.modules is deprecated, use '
-                                'Flask.blueprints instead'), stacklevel=2)
-        return self.blueprints
-
-    def __call__(self, environ, start_response):
-        """Shortcut for :attr:`wsgi_app`."""
-        return self.wsgi_app(environ, start_response)
-
-    def __repr__(self):
-        return '<%s %r>' % (
-            self.__class__.__name__,
-            self.name,
-        )
