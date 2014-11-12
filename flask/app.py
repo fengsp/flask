@@ -1,14 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-    flask.app
-    ~~~~~~~~~
-
-    This module implements the central WSGI application object.
-
-    :copyright: (c) 2011 by Armin Ronacher.
-    :license: BSD, see LICENSE for more details.
-"""
-
 import os
 import sys
 from threading import Lock
@@ -347,12 +336,6 @@ class Flask(_PackageBoundObject):
         self._logger = None
         self.logger_name = self.import_name
 
-        #: A dictionary of all view functions registered.  The keys will
-        #: be function names which are also used to generate URLs and
-        #: the values are the function objects themselves.
-        #: To register a view function, use the :meth:`route` decorator.
-        self.view_functions = {}
-
         # support for the now deprecated `error_handlers` attribute.  The
         # :attr:`error_handler_spec` shall be used now.
         self._error_handlers = {}
@@ -377,49 +360,6 @@ class Flask(_PackageBoundObject):
         #:
         #: .. versionadded:: 0.9
         self.url_build_error_handlers = []
-
-        #: A dictionary with lists of functions that should be called at the
-        #: beginning of the request.  The key of the dictionary is the name of
-        #: the blueprint this function is active for, `None` for all requests.
-        #: This can for example be used to open database connections or
-        #: getting hold of the currently logged in user.  To register a
-        #: function here, use the :meth:`before_request` decorator.
-        self.before_request_funcs = {}
-
-        #: A lists of functions that should be called at the beginning of the
-        #: first request to this instance.  To register a function here, use
-        #: the :meth:`before_first_request` decorator.
-        #:
-        #: .. versionadded:: 0.8
-        self.before_first_request_funcs = []
-
-        #: A dictionary with lists of functions that should be called after
-        #: each request.  The key of the dictionary is the name of the blueprint
-        #: this function is active for, `None` for all requests.  This can for
-        #: example be used to open database connections or getting hold of the
-        #: currently logged in user.  To register a function here, use the
-        #: :meth:`after_request` decorator.
-        self.after_request_funcs = {}
-
-        #: A dictionary with lists of functions that are called after
-        #: each request, even if an exception has occurred. The key of the
-        #: dictionary is the name of the blueprint this function is active for,
-        #: `None` for all requests. These functions are not allowed to modify
-        #: the request, and their return values are ignored. If an exception
-        #: occurred while processing the request, it gets passed to each
-        #: teardown_request function. To register a function here, use the
-        #: :meth:`teardown_request` decorator.
-        #:
-        #: .. versionadded:: 0.7
-        self.teardown_request_funcs = {}
-
-        #: A list of functions that are called when the application context
-        #: is destroyed.  Since the application context is also torn down
-        #: if the request ends this is the place to store code that disconnects
-        #: from databases.
-        #:
-        #: .. versionadded:: 0.9
-        self.teardown_appcontext_funcs = []
 
         #: A dictionary with lists of functions that can be used as URL
         #: value processor functions.  Whenever a URL is built these functions
@@ -1193,105 +1133,6 @@ class Flask(_PackageBoundObject):
         self.jinja_env.globals[name or f.__name__] = f
 
     @setupmethod
-    def before_request(self, f):
-        """Registers a function to run before each request."""
-        self.before_request_funcs.setdefault(None, []).append(f)
-        return f
-
-    @setupmethod
-    def before_first_request(self, f):
-        """Registers a function to be run before the first request to this
-        instance of the application.
-
-        .. versionadded:: 0.8
-        """
-        self.before_first_request_funcs.append(f)
-
-    @setupmethod
-    def after_request(self, f):
-        """Register a function to be run after each request.  Your function
-        must take one parameter, a :attr:`response_class` object and return
-        a new response object or the same (see :meth:`process_response`).
-
-        As of Flask 0.7 this function might not be executed at the end of the
-        request in case an unhandled exception occurred.
-        """
-        self.after_request_funcs.setdefault(None, []).append(f)
-        return f
-
-    @setupmethod
-    def teardown_request(self, f):
-        """Register a function to be run at the end of each request,
-        regardless of whether there was an exception or not.  These functions
-        are executed when the request context is popped, even if not an
-        actual request was performed.
-
-        Example::
-
-            ctx = app.test_request_context()
-            ctx.push()
-            ...
-            ctx.pop()
-
-        When ``ctx.pop()`` is executed in the above example, the teardown
-        functions are called just before the request context moves from the
-        stack of active contexts.  This becomes relevant if you are using
-        such constructs in tests.
-
-        Generally teardown functions must take every necessary step to avoid
-        that they will fail.  If they do execute code that might fail they
-        will have to surround the execution of these code by try/except
-        statements and log occurring errors.
-
-        When a teardown function was called because of a exception it will
-        be passed an error object.
-
-        .. admonition:: Debug Note
-
-           In debug mode Flask will not tear down a request on an exception
-           immediately.  Instead if will keep it alive so that the interactive
-           debugger can still access it.  This behavior can be controlled
-           by the ``PRESERVE_CONTEXT_ON_EXCEPTION`` configuration variable.
-        """
-        self.teardown_request_funcs.setdefault(None, []).append(f)
-        return f
-
-    @setupmethod
-    def teardown_appcontext(self, f):
-        """Registers a function to be called when the application context
-        ends.  These functions are typically also called when the request
-        context is popped.
-
-        Example::
-
-            ctx = app.app_context()
-            ctx.push()
-            ...
-            ctx.pop()
-
-        When ``ctx.pop()`` is executed in the above example, the teardown
-        functions are called just before the app context moves from the
-        stack of active contexts.  This becomes relevant if you are using
-        such constructs in tests.
-
-        Since a request context typically also manages an application
-        context it would also be called when you pop a request context.
-
-        When a teardown function was called because of an exception it will
-        be passed an error object.
-
-        .. versionadded:: 0.9
-        """
-        self.teardown_appcontext_funcs.append(f)
-        return f
-
-    @setupmethod
-    def context_processor(self, f):
-        """Registers a template context processor function."""
-        self.template_context_processors[None].append(f)
-        return f
-
-    @setupmethod
     def url_value_preprocessor(self, f):
         """Registers a function as URL value preprocessor for all view
         functions of the application.  It's called before the view functions
@@ -1439,16 +1280,6 @@ class Flask(_PackageBoundObject):
         raise FormDataRoutingRedirect(request)
 
     def dispatch_request(self):
-        """Does the request dispatching.  Matches the URL and returns the
-        return value of the view or error handler.  This does not have to
-        be a response object.  In order to convert the return value to a
-        proper response object, call :func:`make_response`.
-
-        .. versionchanged:: 0.7
-           This no longer does the exception handling, this code was
-           moved to the new :meth:`full_dispatch_request`.
-        """
-        req = _request_ctx_stack.top.request
         if req.routing_exception is not None:
             self.raise_routing_exception(req)
         rule = req.url_rule
@@ -1482,16 +1313,6 @@ class Flask(_PackageBoundObject):
         rv = self.response_class()
         rv.allow.update(methods)
         return rv
-
-    def should_ignore_error(self, error):
-        """This is called to figure out if an error should be ignored
-        or not as far as the teardown system is concerned.  If this
-        function returns `True` then the teardown handlers will not be
-        passed the error.
-
-        .. versionadded:: 0.10
-        """
-        return False
 
     def make_response(self, rv):
         """Converts the return value from a view function to a real
@@ -1604,84 +1425,3 @@ class Flask(_PackageBoundObject):
         if error is exc_value:
             reraise(exc_type, exc_value, tb)
         raise error
-
-    def do_teardown_request(self, exc=None):
-        """Called after the actual request dispatching and will
-        call every as :meth:`teardown_request` decorated function.  This is
-        not actually called by the :class:`Flask` object itself but is always
-        triggered when the request context is popped.  That way we have a
-        tighter control over certain resources under testing environments.
-
-        .. versionchanged:: 0.9
-           Added the `exc` argument.  Previously this was always using the
-           current exception information.
-        """
-        if exc is None:
-            exc = sys.exc_info()[1]
-        funcs = reversed(self.teardown_request_funcs.get(None, ()))
-        bp = _request_ctx_stack.top.request.blueprint
-        if bp is not None and bp in self.teardown_request_funcs:
-            funcs = chain(funcs, reversed(self.teardown_request_funcs[bp]))
-        for func in funcs:
-            rv = func(exc)
-        request_tearing_down.send(self, exc=exc)
-
-    def do_teardown_appcontext(self, exc=None):
-        """Called when an application context is popped.  This works pretty
-        much the same as :meth:`do_teardown_request` but for the application
-        context.
-
-        .. versionadded:: 0.9
-        """
-        if exc is None:
-            exc = sys.exc_info()[1]
-        for func in reversed(self.teardown_appcontext_funcs):
-            func(exc)
-        appcontext_tearing_down.send(self, exc=exc)
-
-    def app_context(self):
-        return AppContext(self)
-
-    def request_context(self, environ):
-        return RequestContext(self, environ)
-
-    def test_request_context(self, *args, **kwargs):
-        """Creates a WSGI environment from the given values (see
-        :func:`werkzeug.test.EnvironBuilder` for more information, this
-        function accepts the same arguments).
-        """
-        from flask.testing import make_test_environ_builder
-        builder = make_test_environ_builder(self, *args, **kwargs)
-        try:
-            return self.request_context(builder.get_environ())
-        finally:
-            builder.close()
-
-    def wsgi_app(self, environ, start_response):
-        """The actual WSGI application.  This is not implemented in
-        `__call__` so that middlewares can be applied without losing a
-        reference to the class.  So instead of doing this::
-
-            app = MyMiddleware(app)
-
-        It's a better idea to do this instead::
-
-            app.wsgi_app = MyMiddleware(app.wsgi_app)
-
-        Then you still have the original application object around and
-        can continue to call methods on it.
-        """
-        ctx = self.request_context(environ)
-        ctx.push()
-        error = None
-        try:
-            try:
-                response = self.full_dispatch_request()
-            except Exception as e:
-                error = e
-                response = self.make_response(self.handle_exception(e))
-            return response(environ, start_response)
-        finally:
-            if self.should_ignore_error(error):
-                error = None
-            ctx.auto_pop(error)
