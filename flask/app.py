@@ -477,18 +477,6 @@ class Flask(_PackageBoundObject):
         return self.import_name
 
     @property
-    def propagate_exceptions(self):
-        """Returns the value of the `PROPAGATE_EXCEPTIONS` configuration
-        value in case it's set, otherwise a sensible default is returned.
-
-        .. versionadded:: 0.7
-        """
-        rv = self.config['PROPAGATE_EXCEPTIONS']
-        if rv is not None:
-            return rv
-        return self.testing or self.debug
-
-    @property
     def preserve_context_on_exception(self):
         """Returns the value of the `PRESERVE_CONTEXT_ON_EXCEPTION`
         configuration value in case it's set, otherwise a sensible default
@@ -1149,119 +1137,6 @@ class Flask(_PackageBoundObject):
         """
         self.url_default_functions.setdefault(None, []).append(f)
         return f
-
-    def handle_http_exception(self, e):
-        """Handles an HTTP exception.  By default this will invoke the
-        registered error handlers and fall back to returning the
-        exception as response.
-
-        .. versionadded:: 0.3
-        """
-        handlers = self.error_handler_spec.get(request.blueprint)
-        # Proxy exceptions don't have error codes.  We want to always return
-        # those unchanged as errors
-        if e.code is None:
-            return e
-        if handlers and e.code in handlers:
-            handler = handlers[e.code]
-        else:
-            handler = self.error_handler_spec[None].get(e.code)
-        if handler is None:
-            return e
-        return handler(e)
-
-    def trap_http_exception(self, e):
-        """Checks if an HTTP exception should be trapped or not.  By default
-        this will return `False` for all exceptions except for a bad request
-        key error if ``TRAP_BAD_REQUEST_ERRORS`` is set to `True`.  It
-        also returns `True` if ``TRAP_HTTP_EXCEPTIONS`` is set to `True`.
-
-        This is called for all HTTP exceptions raised by a view function.
-        If it returns `True` for any exception the error handler for this
-        exception is not called and it shows up as regular exception in the
-        traceback.  This is helpful for debugging implicitly raised HTTP
-        exceptions.
-
-        .. versionadded:: 0.8
-        """
-        if self.config['TRAP_HTTP_EXCEPTIONS']:
-            return True
-        if self.config['TRAP_BAD_REQUEST_ERRORS']:
-            return isinstance(e, BadRequest)
-        return False
-
-    def handle_user_exception(self, e):
-        """This method is called whenever an exception occurs that should be
-        handled.  A special case are
-        :class:`~werkzeug.exception.HTTPException`\s which are forwarded by
-        this function to the :meth:`handle_http_exception` method.  This
-        function will either return a response value or reraise the
-        exception with the same traceback.
-
-        .. versionadded:: 0.7
-        """
-        exc_type, exc_value, tb = sys.exc_info()
-        assert exc_value is e
-
-        # ensure not to trash sys.exc_info() at that point in case someone
-        # wants the traceback preserved in handle_http_exception.  Of course
-        # we cannot prevent users from trashing it themselves in a custom
-        # trap_http_exception method so that's their fault then.
-        if isinstance(e, HTTPException) and not self.trap_http_exception(e):
-            return self.handle_http_exception(e)
-
-        blueprint_handlers = ()
-        handlers = self.error_handler_spec.get(request.blueprint)
-        if handlers is not None:
-            blueprint_handlers = handlers.get(None, ())
-        app_handlers = self.error_handler_spec[None].get(None, ())
-        for typecheck, handler in chain(blueprint_handlers, app_handlers):
-            if isinstance(e, typecheck):
-                return handler(e)
-
-        reraise(exc_type, exc_value, tb)
-
-    def handle_exception(self, e):
-        """Default exception handling that kicks in when an exception
-        occurs that is not caught.  In debug mode the exception will
-        be re-raised immediately, otherwise it is logged and the handler
-        for a 500 internal server error is used.  If no such handler
-        exists, a default 500 internal server error message is displayed.
-
-        .. versionadded:: 0.3
-        """
-        exc_type, exc_value, tb = sys.exc_info()
-
-        got_request_exception.send(self, exception=e)
-        handler = self.error_handler_spec[None].get(500)
-
-        if self.propagate_exceptions:
-            # if we want to repropagate the exception, we can attempt to
-            # raise it with the whole traceback in case we can do that
-            # (the function was actually called from the except part)
-            # otherwise, we just raise the error again
-            if exc_value is e:
-                reraise(exc_type, exc_value, tb)
-            else:
-                raise e
-
-        self.log_exception((exc_type, exc_value, tb))
-        if handler is None:
-            return InternalServerError()
-        return handler(e)
-
-    def log_exception(self, exc_info):
-        """Logs an exception.  This is called by :meth:`handle_exception`
-        if debugging is disabled and right before the handler is called.
-        The default implementation logs the exception as error on the
-        :attr:`logger`.
-
-        .. versionadded:: 0.8
-        """
-        self.logger.error('Exception on %s [%s]' % (
-            request.path,
-            request.method
-        ), exc_info=exc_info)
 
     def raise_routing_exception(self, request):
         """Exceptions that are recording during routing are reraised with
