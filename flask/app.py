@@ -35,23 +35,6 @@ def _make_timedelta(value):
     return value
 
 
-def setupmethod(f):
-    """Wraps a method so that it performs a check in debug mode if the
-    first request was already handled.
-    """
-    def wrapper_func(self, *args, **kwargs):
-        if self.debug and self._got_first_request:
-            raise AssertionError('A setup function was called after the '
-                'first request was handled.  This usually indicates a bug '
-                'in the application where a module was not imported '
-                'and decorators or other functionality was called too late.\n'
-                'To fix this make sure to import all your view modules, '
-                'database models and everything related at a central place '
-                'before the application starts serving requests.')
-        return f(self, *args, **kwargs)
-    return update_wrapper(wrapper_func, f)
-
-
 class Flask(_PackageBoundObject):
     """The flask object implements a WSGI application and acts as the central
     object.  It is passed the name of the module or package of the
@@ -99,14 +82,6 @@ class Flask(_PackageBoundObject):
         pick up SQL queries in `yourapplication.app` and not
         `yourapplication.views.frontend`)
 
-    .. versionadded:: 0.7
-       The `static_url_path`, `static_folder`, and `template_folder`
-       parameters were added.
-
-    .. versionadded:: 0.8
-       The `instance_path` and `instance_relative_config` parameters were
-       added.
-
     :param import_name: the name of the application package
     :param static_url_path: can be used to specify a different path for the
                             static files on the web.  Defaults to the name
@@ -150,19 +125,6 @@ class Flask(_PackageBoundObject):
     #: flask.g object is not application context scoped.
     #:
     #: .. versionadded:: 0.10
-    app_ctx_globals_class = _AppCtxGlobals
-
-    # Backwards compatibility support
-    def _get_request_globals_class(self):
-        return self.app_ctx_globals_class
-    def _set_request_globals_class(self, value):
-        from warnings import warn
-        warn(DeprecationWarning('request_globals_class attribute is now '
-                                'called app_ctx_globals_class'))
-        self.app_ctx_globals_class = value
-    request_globals_class = property(_get_request_globals_class,
-                                     _set_request_globals_class)
-    del _get_request_globals_class, _set_request_globals_class
 
     #: The debug flag.  Set this to `True` to enable debugging of the
     #: application.  In debug mode the debugger will kick in when an unhandled
@@ -252,11 +214,6 @@ class Flask(_PackageBoundObject):
     #: .. versionadded:: 0.10
     json_decoder = json.JSONDecoder
 
-    #: Options that are passed directly to the Jinja2 environment.
-    jinja_options = ImmutableDict(
-        extensions=['jinja2.ext.autoescape', 'jinja2.ext.with_']
-    )
-
     #: Default configuration parameters.
     default_config = ImmutableDict({
         'DEBUG':                                False,
@@ -335,22 +292,6 @@ class Flask(_PackageBoundObject):
         # Prepare the deferred setup of the logger.
         self._logger = None
         self.logger_name = self.import_name
-
-        # support for the now deprecated `error_handlers` attribute.  The
-        # :attr:`error_handler_spec` shall be used now.
-        self._error_handlers = {}
-
-        #: A dictionary of all registered error handlers.  The key is `None`
-        #: for error handlers active on the application, otherwise the key is
-        #: the name of the blueprint.  Each key points to another dictionary
-        #: where they key is the status code of the http exception.  The
-        #: special key `None` points to a list of tuples where the first item
-        #: is the class for the instance check and the second the error handler
-        #: function.
-        #:
-        #: To register a error handler, use the :meth:`errorhandler`
-        #: decorator.
-        self.error_handler_spec = {None: self._error_handlers}
 
         #: A list of functions that are called when :meth:`url_for` raises a
         #: :exc:`~werkzeug.routing.BuildError`.  Each function registered here
@@ -448,17 +389,6 @@ class Flask(_PackageBoundObject):
                               endpoint='static',
                               view_func=self.send_static_file)
 
-    def _get_error_handlers(self):
-        from warnings import warn
-        warn(DeprecationWarning('error_handlers is deprecated, use the '
-            'new error_handler_spec attribute instead.'), stacklevel=1)
-        return self._error_handlers
-    def _set_error_handlers(self, value):
-        self._error_handlers = value
-        self.error_handler_spec[None] = value
-    error_handlers = property(_get_error_handlers, _set_error_handlers)
-    del _get_error_handlers, _set_error_handlers
-
     @locked_cached_property
     def name(self):
         """The name of the application.  This is usually the import name
@@ -511,20 +441,6 @@ class Flask(_PackageBoundObject):
             self._logger = rv = create_logger(self)
             return rv
 
-    @locked_cached_property
-    def jinja_env(self):
-        """The Jinja2 environment used to load templates."""
-        return self.create_jinja_environment()
-
-    @property
-    def got_first_request(self):
-        """This attribute is set to `True` if the application started
-        handling the first request.
-
-        .. versionadded:: 0.8
-        """
-        return self._got_first_request
-
     def make_config(self, instance_relative=False):
         """Used to create the config attribute by the Flask constructor.
         The `instance_relative` parameter is passed in from the constructor
@@ -563,146 +479,7 @@ class Flask(_PackageBoundObject):
         :param mode: resource file opening mode, default is 'rb'.
         """
         return open(os.path.join(self.instance_path, resource), mode)
-
-    def create_jinja_environment(self):
-        """Creates the Jinja2 environment based on :attr:`jinja_options`
-        and :meth:`select_jinja_autoescape`.  Since 0.7 this also adds
-        the Jinja2 globals and filters after initialization.  Override
-        this function to customize the behavior.
-
-        .. versionadded:: 0.5
-        """
-        options = dict(self.jinja_options)
-        if 'autoescape' not in options:
-            options['autoescape'] = self.select_jinja_autoescape
-        rv = Environment(self, **options)
-        rv.globals.update(
-            url_for=url_for,
-            get_flashed_messages=get_flashed_messages,
-            config=self.config,
-            # request, session and g are normally added with the
-            # context processor for efficiency reasons but for imported
-            # templates we also want the proxies in there.
-            request=request,
-            session=session,
-            g=g
-        )
-        rv.filters['tojson'] = json.tojson_filter
-        return rv
-
-    def create_global_jinja_loader(self):
-        """Creates the loader for the Jinja2 environment.  Can be used to
-        override just the loader and keeping the rest unchanged.  It's
-        discouraged to override this function.  Instead one should override
-        the :meth:`jinja_loader` function instead.
-
-        The global loader dispatches between the loaders of the application
-        and the individual blueprints.
-
-        .. versionadded:: 0.7
-        """
-        return DispatchingJinjaLoader(self)
-
-    def init_jinja_globals(self):
-        """Deprecated.  Used to initialize the Jinja2 globals.
-
-        .. versionadded:: 0.5
-        .. versionchanged:: 0.7
-           This method is deprecated with 0.7.  Override
-           :meth:`create_jinja_environment` instead.
-        """
-
-    def select_jinja_autoescape(self, filename):
-        """Returns `True` if autoescaping should be active for the given
-        template name.
-
-        .. versionadded:: 0.5
-        """
-        if filename is None:
-            return False
         return filename.endswith(('.html', '.htm', '.xml', '.xhtml'))
-
-    def update_template_context(self, context):
-        """Update the template context with some commonly used variables.
-        This injects request, session, config and g into the template
-        context as well as everything template context processors want
-        to inject.  Note that the as of Flask 0.6, the original values
-        in the context will not be overridden if a context processor
-        decides to return a value with the same key.
-
-        :param context: the context as a dictionary that is updated in place
-                        to add extra variables.
-        """
-        funcs = self.template_context_processors[None]
-        reqctx = _request_ctx_stack.top
-        if reqctx is not None:
-            bp = reqctx.request.blueprint
-            if bp is not None and bp in self.template_context_processors:
-                funcs = chain(funcs, self.template_context_processors[bp])
-        orig_ctx = context.copy()
-        for func in funcs:
-            context.update(func())
-        # make sure the original values win.  This makes it possible to
-        # easier add new variables in context processors without breaking
-        # existing views.
-        context.update(orig_ctx)
-
-    def run(self, host=None, port=None, debug=None, **options):
-        """Runs the application on a local development server.  If the
-        :attr:`debug` flag is set the server will automatically reload
-        for code changes and show a debugger in case an exception happened.
-
-        If you want to run the application in debug mode, but disable the
-        code execution on the interactive debugger, you can pass
-        ``use_evalex=False`` as parameter.  This will keep the debugger's
-        traceback screen active, but disable code execution.
-
-        .. admonition:: Keep in Mind
-
-           Flask will suppress any server error with a generic error page
-           unless it is in debug mode.  As such to enable just the
-           interactive debugger without the code reloading, you have to
-           invoke :meth:`run` with ``debug=True`` and ``use_reloader=False``.
-           Setting ``use_debugger`` to `True` without being in debug mode
-           won't catch any exceptions because there won't be any to
-           catch.
-
-        .. versionchanged:: 0.10
-           The default port is now picked from the ``SERVER_NAME`` variable.
-
-        :param host: the hostname to listen on. Set this to ``'0.0.0.0'`` to
-                     have the server available externally as well. Defaults to
-                     ``'127.0.0.1'``.
-        :param port: the port of the webserver. Defaults to ``5000`` or the
-                     port defined in the ``SERVER_NAME`` config variable if
-                     present.
-        :param debug: if given, enable or disable debug mode.
-                      See :attr:`debug`.
-        :param options: the options to be forwarded to the underlying
-                        Werkzeug server.  See
-                        :func:`werkzeug.serving.run_simple` for more
-                        information.
-        """
-        from werkzeug.serving import run_simple
-        if host is None:
-            host = '127.0.0.1'
-        if port is None:
-            server_name = self.config['SERVER_NAME']
-            if server_name and ':' in server_name:
-                port = int(server_name.rsplit(':', 1)[1])
-            else:
-                port = 5000
-        if debug is not None:
-            self.debug = bool(debug)
-        options.setdefault('use_reloader', self.debug)
-        options.setdefault('use_debugger', self.debug)
-        try:
-            run_simple(host, port, self, **options)
-        finally:
-            # reset the first request information if the development server
-            # resetted normally.  This makes it possible to restart the server
-            # without reloader and that stuff from an interactive shell.
-            self._got_first_request = False
 
     def test_client(self, use_cookies=True):
         """Creates a test client for this application.  For information
@@ -771,32 +548,6 @@ class Flask(_PackageBoundObject):
         .. versionadded:: 0.7
         """
         return self.session_interface.make_null_session(self)
-
-    def register_module(self, module, **options):
-        """Registers a module with this application.  The keyword argument
-        of this function are the same as the ones for the constructor of the
-        :class:`Module` class and will override the values of the module if
-        provided.
-
-        .. versionchanged:: 0.7
-           The module system was deprecated in favor for the blueprint
-           system.
-        """
-        assert blueprint_is_module(module), 'register_module requires ' \
-            'actual module objects.  Please upgrade to blueprints though.'
-        if not self.enable_modules:
-            raise RuntimeError('Module support was disabled but code '
-                'attempted to register a module named %r' % module)
-        else:
-            from warnings import warn
-            warn(DeprecationWarning('Modules are deprecated.  Upgrade to '
-                'using blueprints.  Have a look into the documentation for '
-                'more information.  If this module was registered by a '
-                'Flask-Extension upgrade the extension or contact the author '
-                'of that extension instead.  (Registered %r)' % module),
-                stacklevel=2)
-
-        self.register_blueprint(module, **options)
 
     @setupmethod
     def register_blueprint(self, blueprint, **options):
@@ -999,126 +750,6 @@ class Flask(_PackageBoundObject):
             self._register_error_handler(None, code_or_exception, f)
             return f
         return decorator
-
-    def register_error_handler(self, code_or_exception, f):
-        """Alternative error attach function to the :meth:`errorhandler`
-        decorator that is more straightforward to use for non decorator
-        usage.
-
-        .. versionadded:: 0.7
-        """
-        self._register_error_handler(None, code_or_exception, f)
-
-    @setupmethod
-    def _register_error_handler(self, key, code_or_exception, f):
-        if isinstance(code_or_exception, HTTPException):
-            code_or_exception = code_or_exception.code
-        if isinstance(code_or_exception, integer_types):
-            assert code_or_exception != 500 or key is None, \
-                'It is currently not possible to register a 500 internal ' \
-                'server error on a per-blueprint level.'
-            self.error_handler_spec.setdefault(key, {})[code_or_exception] = f
-        else:
-            self.error_handler_spec.setdefault(key, {}).setdefault(None, []) \
-                .append((code_or_exception, f))
-
-    @setupmethod
-    def template_filter(self, name=None):
-        """A decorator that is used to register custom template filter.
-        You can specify a name for the filter, otherwise the function
-        name will be used. Example::
-
-          @app.template_filter()
-          def reverse(s):
-              return s[::-1]
-
-        :param name: the optional name of the filter, otherwise the
-                     function name will be used.
-        """
-        def decorator(f):
-            self.add_template_filter(f, name=name)
-            return f
-        return decorator
-
-    @setupmethod
-    def add_template_filter(self, f, name=None):
-        """Register a custom template filter.  Works exactly like the
-        :meth:`template_filter` decorator.
-
-        :param name: the optional name of the filter, otherwise the
-                     function name will be used.
-        """
-        self.jinja_env.filters[name or f.__name__] = f
-
-    @setupmethod
-    def template_test(self, name=None):
-        """A decorator that is used to register custom template test.
-        You can specify a name for the test, otherwise the function
-        name will be used. Example::
-
-          @app.template_test()
-          def is_prime(n):
-              if n == 2:
-                  return True
-              for i in range(2, int(math.ceil(math.sqrt(n))) + 1):
-                  if n % i == 0:
-                      return False
-              return True
-
-        .. versionadded:: 0.10
-
-        :param name: the optional name of the test, otherwise the
-                     function name will be used.
-        """
-        def decorator(f):
-            self.add_template_test(f, name=name)
-            return f
-        return decorator
-
-    @setupmethod
-    def add_template_test(self, f, name=None):
-        """Register a custom template test.  Works exactly like the
-        :meth:`template_test` decorator.
-
-        .. versionadded:: 0.10
-
-        :param name: the optional name of the test, otherwise the
-                     function name will be used.
-        """
-        self.jinja_env.tests[name or f.__name__] = f
-
-
-    @setupmethod
-    def template_global(self, name=None):
-        """A decorator that is used to register a custom template global function.
-        You can specify a name for the global function, otherwise the function
-        name will be used. Example::
-
-            @app.template_global()
-            def double(n):
-                return 2 * n
-
-        .. versionadded:: 0.10
-
-        :param name: the optional name of the global function, otherwise the
-                     function name will be used.
-        """
-        def decorator(f):
-            self.add_template_global(f, name=name)
-            return f
-        return decorator
-
-    @setupmethod
-    def add_template_global(self, f, name=None):
-        """Register a custom template global function. Works exactly like the
-        :meth:`template_global` decorator.
-
-        .. versionadded:: 0.10
-
-        :param name: the optional name of the global function, otherwise the
-                     function name will be used.
-        """
-        self.jinja_env.globals[name or f.__name__] = f
 
     @setupmethod
     def url_value_preprocessor(self, f):
