@@ -17,69 +17,7 @@ from werkzeug.utils import import_string
 from ._compat import string_types
 
 
-class ConfigAttribute(object):
-    """Makes an attribute forward to the config"""
-
-    def __init__(self, name, get_converter=None):
-        self.__name__ = name
-        self.get_converter = get_converter
-
-    def __get__(self, obj, type=None):
-        if obj is None:
-            return self
-        rv = obj.config[self.__name__]
-        if self.get_converter is not None:
-            rv = self.get_converter(rv)
-        return rv
-
-    def __set__(self, obj, value):
-        obj.config[self.__name__] = value
-
-
 class Config(dict):
-    """Works exactly like a dict but provides ways to fill it from files
-    or special dictionaries.  There are two common patterns to populate the
-    config.
-
-    Either you can fill the config from a config file::
-
-        app.config.from_pyfile('yourconfig.cfg')
-
-    Or alternatively you can define the configuration options in the
-    module that calls :meth:`from_object` or provide an import path to
-    a module that should be loaded.  It is also possible to tell it to
-    use the same module and with that provide the configuration values
-    just before the call::
-
-        DEBUG = True
-        SECRET_KEY = 'development key'
-        app.config.from_object(__name__)
-
-    In both cases (loading from any Python file or loading from modules),
-    only uppercase keys are added to the config.  This makes it possible to use
-    lowercase values in the config file for temporary values that are not added
-    to the config or to define the config keys in the same file that implements
-    the application.
-
-    Probably the most interesting way to load configurations is from an
-    environment variable pointing to a file::
-
-        app.config.from_envvar('YOURAPPLICATION_SETTINGS')
-
-    In this case before launching the application you have to set this
-    environment variable to the file you want to use.  On Linux and OS X
-    use the export statement::
-
-        export YOURAPPLICATION_SETTINGS='/path/to/config/file'
-
-    On windows use `set` instead.
-
-    :param root_path: path to which files are read relative from.  When the
-                      config object is created by the application, this is
-                      the application's :attr:`~flask.Flask.root_path`.
-    :param defaults: an optional dictionary of default values
-    """
-
     def __init__(self, root_path, defaults=None):
         dict.__init__(self, defaults or {})
         self.root_path = root_path
@@ -163,6 +101,3 @@ class Config(dict):
         for key in dir(obj):
             if key.isupper():
                 self[key] = getattr(obj, key)
-
-    def __repr__(self):
-        return '<%s %s>' % (self.__class__.__name__, dict.__repr__(self))
