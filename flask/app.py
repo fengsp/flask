@@ -284,15 +284,6 @@ class Flask(_PackageBoundObject):
         #: .. versionadded:: 0.8
         self.instance_path = instance_path
 
-        #: The configuration dictionary as :class:`Config`.  This behaves
-        #: exactly like a regular dictionary but supports additional methods
-        #: to load a config from files.
-        self.config = self.make_config(instance_relative_config)
-
-        # Prepare the deferred setup of the logger.
-        self._logger = None
-        self.logger_name = self.import_name
-
         #: A list of functions that are called when :meth:`url_for` raises a
         #: :exc:`~werkzeug.routing.BuildError`.  Each function registered here
         #: is called with `error`, `endpoint` and `values`.  If a function
@@ -418,42 +409,6 @@ class Flask(_PackageBoundObject):
         if rv is not None:
             return rv
         return self.debug
-
-    @property
-    def logger(self):
-        """A :class:`logging.Logger` object for this application.  The
-        default configuration is to log to stderr if the application is
-        in debug mode.  This logger can be used to (surprise) log messages.
-        Here some examples::
-
-            app.logger.debug('A value for debugging')
-            app.logger.warning('A warning occurred (%d apples)', 42)
-            app.logger.error('An error occurred')
-
-        .. versionadded:: 0.3
-        """
-        if self._logger and self._logger.name == self.logger_name:
-            return self._logger
-        with _logger_lock:
-            if self._logger and self._logger.name == self.logger_name:
-                return self._logger
-            from flask.logging import create_logger
-            self._logger = rv = create_logger(self)
-            return rv
-
-    def make_config(self, instance_relative=False):
-        """Used to create the config attribute by the Flask constructor.
-        The `instance_relative` parameter is passed in from the constructor
-        of Flask (there named `instance_relative_config`) and indicates if
-        the config should be relative to the instance path or the root path
-        of the application.
-
-        .. versionadded:: 0.8
-        """
-        root_path = self.root_path
-        if instance_relative:
-            root_path = self.instance_path
-        return Config(root_path, self.default_config)
 
     def auto_find_instance_path(self):
         """Tries to locate the instance path if it was not provided to the
