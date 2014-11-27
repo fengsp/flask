@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-    flask.wrappers
-    ~~~~~~~~~~~~~~
-
-    Implements the WSGI wrappers (request and response).
-
-    :copyright: (c) 2011 by Armin Ronacher.
-    :license: BSD, see LICENSE for more details.
-"""
-
 from werkzeug.wrappers import Request as RequestBase, Response as ResponseBase
 from werkzeug.exceptions import BadRequest
 
@@ -170,15 +160,3 @@ class Request(RequestBase):
         if ctx is not None and ctx.app.debug and \
            self.mimetype != 'multipart/form-data' and not self.files:
             attach_enctype_error_multidict(self)
-
-
-class Response(ResponseBase):
-    """The response object that is used by default in Flask.  Works like the
-    response object from Werkzeug but is set to have an HTML mimetype by
-    default.  Quite often you don't have to create this object yourself because
-    :meth:`~flask.Flask.make_response` will take care of that for you.
-
-    If you want to replace the response object used you can subclass this and
-    set :attr:`~flask.Flask.response_class` to your subclass.
-    """
-    default_mimetype = 'text/html'
