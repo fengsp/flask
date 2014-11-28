@@ -257,29 +257,6 @@ def url_for(endpoint, **values):
     return rv
 
 
-def get_template_attribute(template_name, attribute):
-    """Loads a macro (or variable) a template exports.  This can be used to
-    invoke a macro from within Python code.  If you for example have a
-    template named `_cider.html` with the following contents:
-
-    .. sourcecode:: html+jinja
-
-       {% macro hello(name) %}Hello {{ name }}!{% endmacro %}
-
-    You can access this from Python code like this::
-
-        hello = get_template_attribute('_cider.html', 'hello')
-        return hello('World')
-
-    .. versionadded:: 0.2
-
-    :param template_name: the name of the template
-    :param attribute: the name of the variable of macro to access
-    """
-    return getattr(current_app.jinja_env.get_template(template_name).module,
-                   attribute)
-
-
 def flash(message, category='message'):
     """Flashes a message to the next request.  In order to remove the
     flashed message from the session and to display it to the user,
@@ -641,32 +618,6 @@ def find_package(import_name):
     return None, package_path
 
 
-class locked_cached_property(object):
-    """A decorator that converts a function into a lazy property.  The
-    function wrapped is called the first time to retrieve the result
-    and then that calculated result is used the next time you access
-    the value.  Works like the one in Werkzeug but has a lock for
-    thread safety.
-    """
-
-    def __init__(self, func, name=None, doc=None):
-        self.__name__ = name or func.__name__
-        self.__module__ = func.__module__
-        self.__doc__ = doc or func.__doc__
-        self.func = func
-        self.lock = RLock()
-
-    def __get__(self, obj, type=None):
-        if obj is None:
-            return self
-        with self.lock:
-            value = obj.__dict__.get(self.__name__, _missing)
-            if value is _missing:
-                value = self.func(obj)
-                obj.__dict__[self.__name__] = value
-            return value
-
-
 class _PackageBoundObject(object):
 
     def __init__(self, import_name, template_folder=None):
@@ -761,30 +712,3 @@ class _PackageBoundObject(object):
         cache_timeout = self.get_send_file_max_age(filename)
         return send_from_directory(self.static_folder, filename,
                                    cache_timeout=cache_timeout)
-
-    def open_resource(self, resource, mode='rb'):
-        """Opens a resource from the application's resource folder.  To see
-        how this works, consider the following folder structure::
-
-            /myapplication.py
-            /schema.sql
-            /static
-                /style.css
-            /templates
-                /layout.html
-                /index.html
-
-        If you want to open the `schema.sql` file you would do the
-        following::
-
-            with app.open_resource('schema.sql') as f:
-                contents = f.read()
-                do_something_with(contents)
-
-        :param resource: the name of the resource.  To access resources within
-                         subfolders use forward slashes as separator.
-        :param mode: resource file opening mode, default is 'rb'.
-        """
-        if mode not in ('r', 'rb'):
-            raise ValueError('Resources can only be opened for reading')
-        return open(os.path.join(self.root_path, resource), mode)
