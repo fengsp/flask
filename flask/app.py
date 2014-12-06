@@ -360,44 +360,6 @@ class Flask(_PackageBoundObject):
             return rv
         return self.debug
 
-    def test_client(self, use_cookies=True):
-        """Creates a test client for this application.  For information
-        about unit testing head over to :ref:`testing`.
-
-        Note that if you are testing for assertions or exceptions in your
-        application code, you must set ``app.testing = True`` in order for the
-        exceptions to propagate to the test client.  Otherwise, the exception
-        will be handled by the application (not visible to the test client) and
-        the only indication of an AssertionError or other exception will be a
-        500 status code response to the test client.  See the :attr:`testing`
-        attribute.  For example::
-
-            app.testing = True
-            client = app.test_client()
-
-        The test client can be used in a `with` block to defer the closing down
-        of the context until the end of the `with` block.  This is useful if
-        you want to access the context locals for testing::
-
-            with app.test_client() as c:
-                rv = c.get('/?vodka=42')
-                assert request.args['vodka'] == '42'
-
-        See :class:`~flask.testing.FlaskClient` for more information.
-
-        .. versionchanged:: 0.4
-           added support for `with` block usage for the client.
-
-        .. versionadded:: 0.7
-           The `use_cookies` parameter was added as well as the ability
-           to override the client to be used by setting the
-           :attr:`test_client_class` attribute.
-        """
-        cls = self.test_client_class
-        if cls is None:
-            from flask.testing import FlaskClient as cls
-        return cls(self, self.response_class, use_cookies=use_cookies)
-
     def open_session(self, request):
         """Creates or opens a new session.  Default implementation stores all
         session data in a signed cookie.  This requires that the
