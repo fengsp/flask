@@ -348,23 +348,6 @@ class Flask(_PackageBoundObject):
         #: .. versionadded:: 0.7
         self.extensions = {}
 
-        #: The :class:`~werkzeug.routing.Map` for this instance.  You can use
-        #: this to change the routing converters after the class was created
-        #: but before any routes are connected.  Example::
-        #:
-        #:    from werkzeug.routing import BaseConverter
-        #:
-        #:    class ListConverter(BaseConverter):
-        #:        def to_python(self, value):
-        #:            return value.split(',')
-        #:        def to_url(self, values):
-        #:            return ','.join(BaseConverter.to_url(value)
-        #:                            for value in values)
-        #:
-        #:    app = Flask(__name__)
-        #:    app.url_map.converters['list'] = ListConverter
-        self.url_map = Map()
-
         # tracks internally if the application already handled at least one
         # request.
         self._got_first_request = False
