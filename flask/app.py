@@ -263,22 +263,6 @@ class Flask(_PackageBoundObject):
                  instance_path=None, instance_relative_config=False):
         _PackageBoundObject.__init__(self, import_name,
                                      template_folder=template_folder)
-        if static_path is not None:
-            from warnings import warn
-            warn(DeprecationWarning('static_path is now called '
-                                    'static_url_path'), stacklevel=2)
-            static_url_path = static_path
-
-        if static_url_path is not None:
-            self.static_url_path = static_url_path
-        if static_folder is not None:
-            self.static_folder = static_folder
-        if instance_path is None:
-            instance_path = self.auto_find_instance_path()
-        elif not os.path.isabs(instance_path):
-            raise ValueError('If an instance path is provided it must be '
-                             'absolute.  A relative path was given instead.')
-
         #: Holds the path to the instance folder.
         #:
         #: .. versionadded:: 0.8
@@ -363,23 +347,6 @@ class Flask(_PackageBoundObject):
                               endpoint='static',
                               view_func=self.send_static_file)
 
-    @locked_cached_property
-    def name(self):
-        """The name of the application.  This is usually the import name
-        with the difference that it's guessed from the run file if the
-        import name is main.  This name is used as a display name when
-        Flask needs the name of the application.  It can be set and overridden
-        to change the value.
-
-        .. versionadded:: 0.8
-        """
-        if self.import_name == '__main__':
-            fn = getattr(sys.modules['__main__'], '__file__', None)
-            if fn is None:
-                return '__main__'
-            return os.path.splitext(os.path.basename(fn))[0]
-        return self.import_name
-
     @property
     def preserve_context_on_exception(self):
         """Returns the value of the `PRESERVE_CONTEXT_ON_EXCEPTION`
@@ -392,32 +359,6 @@ class Flask(_PackageBoundObject):
         if rv is not None:
             return rv
         return self.debug
-
-    def auto_find_instance_path(self):
-        """Tries to locate the instance path if it was not provided to the
-        constructor of the application class.  It will basically calculate
-        the path to a folder named ``instance`` next to your main file or
-        the package.
-
-        .. versionadded:: 0.8
-        """
-        prefix, package_path = find_package(self.import_name)
-        if prefix is None:
-            return os.path.join(package_path, 'instance')
-        return os.path.join(prefix, 'var', self.name + '-instance')
-
-    def open_instance_resource(self, resource, mode='rb'):
-        """Opens a resource from the application's instance folder
-        (:attr:`instance_path`).  Otherwise works like
-        :meth:`open_resource`.  Instance resources can also be opened for
-        writing.
-
-        :param resource: the name of the resource.  To access resources within
-                         subfolders use forward slashes as separator.
-        :param mode: resource file opening mode, default is 'rb'.
-        """
-        return open(os.path.join(self.instance_path, resource), mode)
-        return filename.endswith(('.html', '.htm', '.xml', '.xhtml'))
 
     def test_client(self, use_cookies=True):
         """Creates a test client for this application.  For information
