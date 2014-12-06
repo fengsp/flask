@@ -1,15 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-    flask.testing
-    ~~~~~~~~~~~~~
-
-    Implements test support helpers.  This module is lazily imported
-    and usually not used in production environments.
-
-    :copyright: (c) 2011 by Armin Ronacher.
-    :license: BSD, see LICENSE for more details.
-"""
-
 from contextlib import contextmanager
 from werkzeug.test import Client, EnvironBuilder
 from flask import _request_ctx_stack
