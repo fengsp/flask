@@ -12,18 +12,6 @@ from werkzeug.exceptions import HTTPException, InternalServerError, \
 
 from .helpers import _PackageBoundObject, url_for, get_flashed_messages, \
      locked_cached_property, _endpoint_from_view_func, find_package
-from . import json
-from .wrappers import Request, Response
-from .config import ConfigAttribute, Config
-from .ctx import RequestContext, AppContext, _AppCtxGlobals
-from .globals import _request_ctx_stack, request, session, g
-from .sessions import SecureCookieSessionInterface
-from .module import blueprint_is_module
-from .templating import DispatchingJinjaLoader, Environment, \
-     _default_template_ctx_processor
-from .signals import request_started, request_finished, got_request_exception, \
-     request_tearing_down, appcontext_tearing_down
-from ._compat import reraise, string_types, text_type, integer_types
 
 # a lock used for logger initialization
 _logger_lock = Lock()
@@ -36,148 +24,10 @@ def _make_timedelta(value):
 
 
 class Flask(_PackageBoundObject):
-    #: The debug flag.  Set this to `True` to enable debugging of the
-    #: application.  In debug mode the debugger will kick in when an unhandled
-    #: exception occurs and the integrated server will automatically reload
-    #: the application if changes in the code are detected.
-    #:
-    #: This attribute can also be configured from the config with the `DEBUG`
-    #: configuration key.  Defaults to `False`.
-    debug = ConfigAttribute('DEBUG')
-
-    #: The testing flag.  Set this to `True` to enable the test mode of
-    #: Flask extensions (and in the future probably also Flask itself).
-    #: For example this might activate unittest helpers that have an
-    #: additional runtime cost which should not be enabled by default.
-    #:
-    #: If this is enabled and PROPAGATE_EXCEPTIONS is not changed from the
-    #: default it's implicitly enabled.
-    #:
-    #: This attribute can also be configured from the config with the
-    #: `TESTING` configuration key.  Defaults to `False`.
-    testing = ConfigAttribute('TESTING')
-
-    #: If a secret key is set, cryptographic components can use this to
-    #: sign cookies and other things.  Set this to a complex random value
-    #: when you want to use the secure cookie for instance.
-    #:
-    #: This attribute can also be configured from the config with the
-    #: `SECRET_KEY` configuration key.  Defaults to `None`.
-    secret_key = ConfigAttribute('SECRET_KEY')
-
-    #: The secure cookie uses this for the name of the session cookie.
-    #:
-    #: This attribute can also be configured from the config with the
-    #: `SESSION_COOKIE_NAME` configuration key.  Defaults to ``'session'``
-    session_cookie_name = ConfigAttribute('SESSION_COOKIE_NAME')
-
-    #: A :class:`~datetime.timedelta` which is used to set the expiration
-    #: date of a permanent session.  The default is 31 days which makes a
-    #: permanent session survive for roughly one month.
-    #:
-    #: This attribute can also be configured from the config with the
-    #: `PERMANENT_SESSION_LIFETIME` configuration key.  Defaults to
-    #: ``timedelta(days=31)``
-    permanent_session_lifetime = ConfigAttribute('PERMANENT_SESSION_LIFETIME',
-        get_converter=_make_timedelta)
-
-    #: Enable this if you want to use the X-Sendfile feature.  Keep in
-    #: mind that the server has to support this.  This only affects files
-    #: sent with the :func:`send_file` method.
-    #:
-    #: .. versionadded:: 0.2
-    #:
-    #: This attribute can also be configured from the config with the
-    #: `USE_X_SENDFILE` configuration key.  Defaults to `False`.
-    use_x_sendfile = ConfigAttribute('USE_X_SENDFILE')
-
-    #: The name of the logger to use.  By default the logger name is the
-    #: package name passed to the constructor.
-    #:
-    #: .. versionadded:: 0.4
-    logger_name = ConfigAttribute('LOGGER_NAME')
-
-    #: Enable the deprecated module support?  This is active by default
-    #: in 0.7 but will be changed to False in 0.8.  With Flask 1.0 modules
-    #: will be removed in favor of Blueprints
-    enable_modules = True
-
-    #: The logging format used for the debug logger.  This is only used when
-    #: the application is in debug mode, otherwise the attached logging
-    #: handler does the formatting.
-    #:
-    #: .. versionadded:: 0.3
-    debug_log_format = (
-        '-' * 80 + '\n' +
-        '%(levelname)s in %(module)s [%(pathname)s:%(lineno)d]:\n' +
-        '%(message)s\n' +
-        '-' * 80
-    )
-
-    #: The JSON encoder class to use.  Defaults to :class:`~flask.json.JSONEncoder`.
-    #:
-    #: .. versionadded:: 0.10
-    json_encoder = json.JSONEncoder
-
-    #: The JSON decoder class to use.  Defaults to :class:`~flask.json.JSONDecoder`.
-    #:
-    #: .. versionadded:: 0.10
-    json_decoder = json.JSONDecoder
-
-    #: Default configuration parameters.
-    default_config = ImmutableDict({
-        'DEBUG':                                False,
-        'TESTING':                              False,
-        'PROPAGATE_EXCEPTIONS':                 None,
-        'PRESERVE_CONTEXT_ON_EXCEPTION':        None,
-        'SECRET_KEY':                           None,
-        'PERMANENT_SESSION_LIFETIME':           timedelta(days=31),
-        'USE_X_SENDFILE':                       False,
-        'LOGGER_NAME':                          None,
-        'SERVER_NAME':                          None,
-        'APPLICATION_ROOT':                     None,
-        'SESSION_COOKIE_NAME':                  'session',
-        'SESSION_COOKIE_DOMAIN':                None,
-        'SESSION_COOKIE_PATH':                  None,
-        'SESSION_COOKIE_HTTPONLY':              True,
-        'SESSION_COOKIE_SECURE':                False,
-        'MAX_CONTENT_LENGTH':                   None,
-        'SEND_FILE_MAX_AGE_DEFAULT':            12 * 60 * 60, # 12 hours
-        'TRAP_BAD_REQUEST_ERRORS':              False,
-        'TRAP_HTTP_EXCEPTIONS':                 False,
-        'PREFERRED_URL_SCHEME':                 'http',
-        'JSON_AS_ASCII':                        True,
-        'JSON_SORT_KEYS':                       True,
-        'JSONIFY_PRETTYPRINT_REGULAR':          True,
-    })
-
-    #: The rule object to use for URL rules created.  This is used by
-    #: :meth:`add_url_rule`.  Defaults to :class:`werkzeug.routing.Rule`.
-    #:
-    #: .. versionadded:: 0.7
-    url_rule_class = Rule
-
-    #: the test client that is used with when `test_client` is used.
-    #:
-    #: .. versionadded:: 0.7
-    test_client_class = None
-
-    #: the session interface to use.  By default an instance of
-    #: :class:`~flask.sessions.SecureCookieSessionInterface` is used here.
-    #:
-    #: .. versionadded:: 0.8
-    session_interface = SecureCookieSessionInterface()
 
     def __init__(self, import_name, static_path=None, static_url_path=None,
                  static_folder='static', template_folder='templates',
                  instance_path=None, instance_relative_config=False):
-        _PackageBoundObject.__init__(self, import_name,
-                                     template_folder=template_folder)
-        #: Holds the path to the instance folder.
-        #:
-        #: .. versionadded:: 0.8
-        self.instance_path = instance_path
-
         #: A list of functions that are called when :meth:`url_for` raises a
         #: :exc:`~werkzeug.routing.BuildError`.  Each function registered here
         #: is called with `error`, `endpoint` and `values`.  If a function
@@ -225,27 +75,6 @@ class Flask(_PackageBoundObject):
         #:
         #: .. versionadded:: 0.7
         self.blueprints = {}
-
-        #: a place where extensions can store application specific state.  For
-        #: example this is where an extension could store database engines and
-        #: similar things.  For backwards compatibility extensions should register
-        #: themselves like this::
-        #:
-        #:      if not hasattr(app, 'extensions'):
-        #:          app.extensions = {}
-        #:      app.extensions['extensionname'] = SomeObject()
-        #:
-        #: The key must match the name of the `flaskext` module.  For example in
-        #: case of a "Flask-Foo" extension in `flaskext.foo`, the key would be
-        #: ``'foo'``.
-        #:
-        #: .. versionadded:: 0.7
-        self.extensions = {}
-
-        # tracks internally if the application already handled at least one
-        # request.
-        self._got_first_request = False
-        self._before_request_lock = Lock()
 
         # register the static folder for the application.  Do that even
         # if the folder does not exist.  First of all it might be created
@@ -414,93 +243,6 @@ class Flask(_PackageBoundObject):
                                      'existing endpoint function: %s' % endpoint)
             self.view_functions[endpoint] = view_func
 
-    def route(self, rule, **options):
-        """A decorator that is used to register a view function for a
-        given URL rule.  This does the same thing as :meth:`add_url_rule`
-        but is intended for decorator usage::
-
-            @app.route('/')
-            def index():
-                return 'Hello World'
-
-        For more information refer to :ref:`url-route-registrations`.
-
-        :param rule: the URL rule as string
-        :param endpoint: the endpoint for the registered URL rule.  Flask
-                         itself assumes the name of the view function as
-                         endpoint
-        :param options: the options to be forwarded to the underlying
-                        :class:`~werkzeug.routing.Rule` object.  A change
-                        to Werkzeug is handling of method options.  methods
-                        is a list of methods this rule should be limited
-                        to (`GET`, `POST` etc.).  By default a rule
-                        just listens for `GET` (and implicitly `HEAD`).
-                        Starting with Flask 0.6, `OPTIONS` is implicitly
-                        added and handled by the standard request handling.
-        """
-        def decorator(f):
-            endpoint = options.pop('endpoint', None)
-            self.add_url_rule(rule, endpoint, f, **options)
-            return f
-        return decorator
-
-    @setupmethod
-    def endpoint(self, endpoint):
-        """A decorator to register a function as an endpoint.
-        Example::
-
-            @app.endpoint('example.endpoint')
-            def example():
-                return "example"
-
-        :param endpoint: the name of the endpoint
-        """
-        def decorator(f):
-            self.view_functions[endpoint] = f
-            return f
-        return decorator
-
-    @setupmethod
-    def errorhandler(self, code_or_exception):
-        """A decorator that is used to register a function give a given
-        error code.  Example::
-
-            @app.errorhandler(404)
-            def page_not_found(error):
-                return 'This page does not exist', 404
-
-        You can also register handlers for arbitrary exceptions::
-
-            @app.errorhandler(DatabaseError)
-            def special_exception_handler(error):
-                return 'Database connection failed', 500
-
-        You can also register a function as error handler without using
-        the :meth:`errorhandler` decorator.  The following example is
-        equivalent to the one above::
-
-            def page_not_found(error):
-                return 'This page does not exist', 404
-            app.error_handler_spec[None][404] = page_not_found
-
-        Setting error handlers via assignments to :attr:`error_handler_spec`
-        however is discouraged as it requires fiddling with nested dictionaries
-        and the special case for arbitrary exception types.
-
-        The first `None` refers to the active blueprint.  If the error
-        handler should be application wide `None` shall be used.
-
-        .. versionadded:: 0.7
-           One can now additionally also register custom exception types
-           that do not necessarily have to be a subclass of the
-           :class:`~werkzeug.exceptions.HTTPException` class.
-
-        :param code: the code as integer for the handler
-        """
-        def decorator(f):
-            self._register_error_handler(None, code_or_exception, f)
-            return f
-        return decorator
 
     @setupmethod
     def url_value_preprocessor(self, f):
