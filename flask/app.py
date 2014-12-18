@@ -313,63 +313,6 @@ class Flask(_PackageBoundObject):
         rv.allow.update(methods)
         return rv
 
-    def make_response(self, rv):
-        """Converts the return value from a view function to a real
-        response object that is an instance of :attr:`response_class`.
-
-        The following types are allowed for `rv`:
-
-        .. tabularcolumns:: |p{3.5cm}|p{9.5cm}|
-
-        ======================= ===========================================
-        :attr:`response_class`  the object is returned unchanged
-        :class:`str`            a response object is created with the
-                                string as body
-        :class:`unicode`        a response object is created with the
-                                string encoded to utf-8 as body
-        a WSGI function         the function is called as WSGI application
-                                and buffered as response object
-        :class:`tuple`          A tuple in the form ``(response, status,
-                                headers)`` where `response` is any of the
-                                types defined here, `status` is a string
-                                or an integer and `headers` is a list of
-                                a dictionary with header values.
-        ======================= ===========================================
-
-        :param rv: the return value from the view function
-
-        .. versionchanged:: 0.9
-           Previously a tuple was interpreted as the arguments for the
-           response object.
-        """
-        status = headers = None
-        if isinstance(rv, tuple):
-            rv, status, headers = rv + (None,) * (3 - len(rv))
-
-        if rv is None:
-            raise ValueError('View function did not return a response')
-
-        if not isinstance(rv, self.response_class):
-            # When we create a response object directly, we let the constructor
-            # set the headers and status.  We do this because there can be
-            # some extra logic involved when creating these objects with
-            # specific values (like default content type selection).
-            if isinstance(rv, (text_type, bytes, bytearray)):
-                rv = self.response_class(rv, headers=headers, status=status)
-                headers = status = None
-            else:
-                rv = self.response_class.force_type(rv, request.environ)
-
-        if status is not None:
-            if isinstance(status, string_types):
-                rv.status = status
-            else:
-                rv.status_code = status
-        if headers:
-            rv.headers.extend(headers)
-
-        return rv
-
     def create_url_adapter(self, request):
         """Creates a URL adapter for the given request.  The URL adapter
         is created at a point where the request context is not yet set up
