@@ -68,35 +68,6 @@ class Request(RequestBase):
         if self.url_rule is not None:
             return self.url_rule.endpoint
 
-    @property
-    def module(self):
-        """The name of the current module if the request was dispatched
-        to an actual module.  This is deprecated functionality, use blueprints
-        instead.
-        """
-        from warnings import warn
-        warn(DeprecationWarning('modules were deprecated in favor of '
-                                'blueprints.  Use request.blueprint '
-                                'instead.'), stacklevel=2)
-        if self._is_old_module:
-            return self.blueprint
-
-    @property
-    def blueprint(self):
-        """The name of the current blueprint"""
-        if self.url_rule and '.' in self.url_rule.endpoint:
-            return self.url_rule.endpoint.rsplit('.', 1)[0]
-
-    @property
-    def json(self):
-        """If the mimetype is `application/json` this will contain the
-        parsed JSON data.  Otherwise this will be `None`.
-
-        The :meth:`get_json` method should be used instead.
-        """
-        # XXX: deprecate property
-        return self.get_json()
-
     def get_json(self, force=False, silent=False, cache=True):
         """Parses the incoming JSON request data and returns it.  If
         parsing fails the :meth:`on_json_loading_failed` method on the
